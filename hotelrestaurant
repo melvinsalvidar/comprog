@@ -1,0 +1,591 @@
+import java.io.*;
+import java.util.*;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
+public class sjm {
+    static String customerFileName = "Customer_Records.txt";
+    static String ordersFileName = "Reservation.txt";
+    static BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+
+    public static void main(String[] args) {
+        createFile(customerFileName); 
+        createFile(ordersFileName);
+        mainMenu();
+    }
+
+   
+    private static void mainMenu() {
+        while (true) {
+            System.out.println("\n=== HOTEL MANAGEMENT SYSTEM ===");
+            System.out.println("[A] Create Customer Record");
+            System.out.println("[B] Create Reservation Record");
+            System.out.println("[C] Billing Module");
+            System.out.println("[X] Exit System");
+            System.out.print("Select an option: ");
+            try {
+                String option = reader.readLine().toUpperCase();
+                switch (option) {
+                    case "A":
+                        customerRecordModule();
+                        break;
+                    case "B":
+                        restaurantRecordModule();
+                        break;
+                    case "C":
+                        billingModule();
+                        break;
+                    case "X":
+                        System.out.println("Exiting system. Thank you!");
+                        System.exit(0);
+                        break;
+                    default:
+                        System.out.println("Invalid option. Please try again.");
+                }
+            } catch (IOException e) {
+                System.out.println("An error occurred with input. Please try again.");
+            }
+        }
+    }
+
+    // Billing Module
+private static void billingModule() {
+    try {
+        // Step 1: Enter Customer Account Number
+        System.out.print("Enter Customer Account Number to calculate bill: ");
+        String accountNumber = reader.readLine();
+
+        // Step 2: Read the orders file to get the customer's restaurant orders and room reservations
+        File orderFile = new File(ordersFileName);
+        if (!orderFile.exists()) {
+            System.out.println("No orders record found for billing.");
+            return;
+        }
+
+        double totalBill = 0.0;
+        boolean hasOrders = false;
+        boolean hasRoomReservation = false;
+
+        System.out.println("\n=== BILLING MODULE ===");
+        System.out.println("Fetching orders and room reservations...");
+
+        try (BufferedReader fileReader = new BufferedReader(new FileReader(orderFile))) {
+            String line;
+            while ((line = fileReader.readLine()) != null) {
+                if (line.contains("Account Number: " + accountNumber)) {
+                    // Display the restaurant orders
+                    if (line.contains("Category: Meal") || line.contains("Category: Drink") || 
+                        line.contains("Category: Dessert") || line.contains("Category: Side Dish") || 
+                        line.contains("Category: Bundle")) {
+
+                        hasOrders = true;
+                        String[] parts = line.split(", ");
+                        String itemName = parts[3].split(": ")[1];
+                        String quantity = parts[4].split(": ")[1];
+                        String cost = parts[5].split(": ")[1].replace("PHP ", "");
+                        double itemCost = Double.parseDouble(cost);
+                        totalBill += itemCost;
+
+                        System.out.println("Item: " + itemName + ", Quantity: " + quantity + ", Cost: PHP " + itemCost);
+                    }
+                    // Display the room reservation (Assumed to be stored in the same file, with the "Room" category)
+                    if (line.contains("Category: Room") && line.contains("Account Number: " + accountNumber)) {
+                        hasRoomReservation = true;
+                        String[] parts = line.split(", ");
+                        String roomType = parts[3].split(": ")[1];
+                        String roomCost = parts[4].split(": ")[1].replace("PHP ", "");
+                        double roomPrice = Double.parseDouble(roomCost);
+                        totalBill += roomPrice;
+                        System.out.println("Room Reservation: " + roomType + ", Cost: PHP " + roomPrice);
+                    }
+                }
+            }
+        }
+
+        // If no orders were found for this account number
+        if (!hasOrders && !hasRoomReservation) {
+            System.out.println("No orders or room reservations found for Account Number: " + accountNumber);
+            return;
+        }
+
+        // Step 3: Display total bill and ask for payment
+        System.out.println("\n--- Bill Summary ---");
+        System.out.println("Total Bill: PHP " + totalBill);
+
+        // Step 4: Ask for payment details (amount received)
+        System.out.print("Enter Amount Received: PHP ");
+        double amountReceived = Double.parseDouble(reader.readLine());
+
+        if (amountReceived < totalBill) {
+            System.out.println("Insufficient payment. The amount received is less than the total bill.");
+            return;
+        }
+
+        double change = amountReceived - totalBill;
+        System.out.println("Change: PHP " + change);
+
+        // Step 5: Mark Account as Settled
+        File customerFile = new File(customerFileName);
+        if (customerFile.exists()) {
+            // We need to update the customer record to mark the account as settled
+            File tempFile = new File("temp_" + customerFileName);
+            try (BufferedReader reader = new BufferedReader(new FileReader(customerFile));
+                 BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains("Account Number: " + accountNumber)) {
+                        // Mark account as settled
+                        line = line.replace("Status: Active", "Status: Settled");
+                    }
+                    writer.write(line);
+                    writer.newLine();
+                }
+            }
+
+            // Replace the original file with the updated one
+            if (customerFile.delete()) {
+                tempFile.renameTo(customerFile);
+            }
+        }
+
+        // Step 6: Confirm the checkout
+        System.out.println("\nCustomer Account " + accountNumber + " has been marked as Settled.");
+        System.out.println("Thank you for your payment!");
+    } catch (IOException | NumberFormatException e) {
+        System.out.println("An error occurred while processing the billing module.");
+    }
+}
+
+
+    // Customer Record Module
+    private static void customerRecordModule() {
+        while (true) {
+            System.out.println("\n=== CUSTOMER RECORD MODULE ===");
+            System.out.println("[A] Create Customer Record");
+            System.out.println("[B] Update Customer Record");
+            System.out.println("[C] View Customer Records");
+            System.out.println("[X] Return to Main Menu");
+            System.out.print("Select an option: ");
+            try {
+                String option = reader.readLine().toUpperCase();
+                switch (option) {
+                    case "A":
+                        createCustomerRecord();
+                        break;
+                    case "B":
+                        updateCustomerRecord();
+                        break;
+                    case "C":
+                        viewCustomerRecords();
+                        break;
+                    case "X":
+                        System.out.println("Returning to Main Menu...");
+                        return;
+                    default:
+                        System.out.println("Invalid option. Please try again.");
+                }
+            } catch (IOException e) {
+                System.out.println("An error occurred with input. Please try again.");
+            }
+        }
+    }
+
+   
+    // Method to create a new customer record
+    private static void createCustomerRecord() {
+        try {
+            System.out.print("\nEnter Customer Name: ");
+            String name = reader.readLine();
+
+            System.out.print("Enter Customer Birthdate (YYYY-MM-DD): ");
+            String birthdateStr = reader.readLine();
+            int age = calculateAge(birthdateStr);
+
+            System.out.print("Enter Contact Number: ");
+            String contact = reader.readLine();
+            
+            System.out.print("Date of Reservation: ");
+            String dateReservation = reader.readLine();
+            
+            System.out.print("Time of Reservation: ");
+            String timeReservation = reader.readLine();
+            
+            System.out.print("Numbe of Guest: ");
+            String numGuest = reader.readLine();
+
+            // Generate account number based on name and birthdate
+            String customerAccountNumber = generateCustomerAccountNumber(name, birthdateStr);
+
+            // Write customer details including the account number and age to the file
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(customerFileName, true))) {
+                writer.write("Account Number: " + customerAccountNumber + ", Customer: " + name + ", Age: " + age + ", Contact: " + contact + ", Date of Reservation: " + dateReservation + ", Time of Reservation: " + timeReservation + ", Number of Guest: " + numGuest);
+                writer.newLine();
+            }
+
+            System.out.println("Customer record created successfully!");
+        } catch (IOException | NumberFormatException e) {
+            System.out.println("An error occurred while creating the customer record.");
+        }
+    }
+
+    // Helper method to generate a unique customer account number
+    private static String generateCustomerAccountNumber(String name, String birthdate) {
+        String formattedName = name.replaceAll("\\s", "").toLowerCase();
+        String formattedBirthdate = birthdate.replaceAll("-", "");
+        return formattedName + "-" + formattedBirthdate;
+    }
+
+    // Helper method to calculate the age from the birthdate string
+    private static int calculateAge(String birthdateStr) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            LocalDate birthdate = LocalDate.parse(birthdateStr, formatter);
+            LocalDate currentDate = LocalDate.now();
+            return Period.between(birthdate, currentDate).getYears();
+        } catch (DateTimeParseException e) {
+            System.out.println("Invalid date format. Please use YYYY-MM-DD.");
+            return 0;
+        }
+    }
+
+
+    private static void updateCustomerRecord() {
+        System.out.println("\n=== UPDATE CUSTOMER RECORD ===");
+
+        System.out.print("Enter Customer Account Number to Update: ");
+        try {
+            String accountNumberToUpdate = reader.readLine();
+            File customerFile = new File(customerFileName);
+
+            if (!customerFile.exists()) {
+                System.out.println("No customer records found.");
+                return;
+            }
+
+            BufferedReader fileReader = new BufferedReader(new FileReader(customerFile));
+            List<String> customerRecords = new ArrayList<>();
+            String line;
+            boolean recordFound = false;
+
+            while ((line = fileReader.readLine()) != null) {
+                if (line.contains("Account Number: " + accountNumberToUpdate)) {
+                    recordFound = true;
+                    System.out.println("Found customer: " + line);
+                    String[] customerDetails = line.split(", ");
+                    System.out.print("Enter new Customer Name: ");
+                    String name = reader.readLine();
+                    System.out.print("Enter new Contact Number: ");
+                    String contact = reader.readLine();
+                    System.out.print("Date of Reservation: ");
+                    String dateReservation = reader.readLine();
+                    System.out.print("Time of Reservation: ");
+                    String timeReservation = reader.readLine();
+                    System.out.print("Numbe of Guest: ");
+                    String numGuest = reader.readLine();
+                    String updatedRecord = customerDetails[0] + ", Customer: " + name + ", " + customerDetails[2] + ", Contact: " + contact + ", Date of Reservation: " + dateReservation + ", Time of Reservation: " + timeReservation + ", Number of Guest: " + numGuest;
+                    customerRecords.add(updatedRecord);
+                } else {
+                    customerRecords.add(line);
+                }
+            }
+
+            if (recordFound) {
+                BufferedWriter fileWriter = new BufferedWriter(new FileWriter(customerFile));
+                for (String record : customerRecords) {
+                    fileWriter.write(record);
+                    fileWriter.newLine();
+                }
+                fileWriter.close();
+                System.out.println("Customer record updated successfully.");
+            } else {
+                System.out.println("Customer not found.");
+            }
+            fileReader.close();
+        } catch (IOException e) {
+            System.out.println("An error occurred while updating the customer record.");
+        }
+    }
+
+  private static void viewCustomerRecords() {
+    System.out.println("\n=== VIEW CUSTOMER RECORD ===");
+    try {
+        System.out.print("Enter Customer Account Number: ");
+        String accountNumber = reader.readLine();
+
+        File file = new File(customerFileName);
+        if (!file.exists()) {
+            System.out.println("No customer records found.");
+            return;
+        }
+
+        BufferedReader fileReader = new BufferedReader(new FileReader(file));
+        String line;
+        boolean recordFound = false;
+
+        while ((line = fileReader.readLine()) != null) {
+            if (line.contains("Account Number: " + accountNumber)) {
+                System.out.println("\nCustomer Details:");
+                System.out.println(line);
+                recordFound = true;
+                break;
+            }
+        }
+
+        if (!recordFound) {
+            System.out.println("No customer found with Account Number: " + accountNumber);
+        }
+
+        fileReader.close();
+    } catch (IOException e) {
+        System.out.println("An error occurred while viewing customer records.");
+    }
+}
+
+
+    // Create file if it doesn't exist
+    private static void createFile(String fileName) {
+        File file = new File(fileName);
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                System.out.println("An error occurred while creating the file: " + fileName);
+            }
+        }
+    }
+
+
+// Restaurant Record Module
+private static void restaurantRecordModule() {
+    try {
+        // Step 1: Ask for the customer account number and validate it
+        System.out.print("\nEnter Customer Account Number: ");
+        String accountNumber = reader.readLine();
+
+        File customerFile = new File(customerFileName);
+        if (!customerFile.exists()) {
+            System.out.println("No customer records found.");
+            return;
+        }
+
+        // Validate customer account number
+        String customerName = null;
+        try (BufferedReader customerReader = new BufferedReader(new FileReader(customerFile))) {
+            String line;
+            while ((line = customerReader.readLine()) != null) {
+                if (line.contains("Account Number: " + accountNumber)) {
+                    String[] parts = line.split(", ");
+                    for (String part : parts) {
+                        if (part.startsWith("Customer: ")) {
+                            customerName = part.split(": ")[1];
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (customerName == null) {
+            System.out.println("Invalid account number. Please check and try again.");
+            return;
+        }
+
+       // Step 2: Display the restaurant menu options
+while (true) {
+    System.out.println("\n=== RESTAURANT RECORD MODULE ===");
+    System.out.println("Welcome, " + customerName + "!");
+    System.out.println("[A] Meal Menu");
+    System.out.println("[B] Drink Menu");
+    System.out.println("[C] Dessert Menu");
+    System.out.println("[D] Side Dishes Menu");
+    System.out.println("[E] Bundle Menu");
+    System.out.println("[F] Show order/s and Total");
+    System.out.println("[X] Return to Main Menu");
+    System.out.print("Select an option: ");
+
+    try {
+        String option = reader.readLine().toUpperCase();
+        switch (option) {
+            case "A":
+                handleOrderMenu(accountNumber, customerName, "Meal", getMealOptions());
+                break;
+            case "B":
+                handleOrderMenu(accountNumber, customerName, "Drink", getDrinkOptions());
+                break;
+            case "C":
+                handleOrderMenu(accountNumber, customerName, "Dessert", getDessertOptions());
+                break;
+            case "D":
+                handleOrderMenu(accountNumber, customerName, "Side Dish", getSideDishOptions());
+                break;
+            case "E":
+                handleOrderMenu(accountNumber, customerName, "Bundle", getBundleOptions());
+                break;
+            case "F":
+                showOrdersAndTotal(accountNumber, customerName);
+                break;
+            case "X":
+                System.out.println("Returning to Main Menu...");
+                return;
+            default:
+                System.out.println("Invalid option. Please try again.");
+        }
+    } catch (IOException e) {
+        System.out.println("An error occurred with input. Please try again.");
+    }
+}
+
+    } catch (IOException e) {
+        System.out.println("An error occurred while accessing the restaurant record module.");
+    }
+}
+
+// Generic handler for menu options
+private static void handleOrderMenu(String accountNumber, String customerName, String category, Map<Integer, String> options) {
+    try {
+        System.out.println("\n=== " + category.toUpperCase() + " MENU ===");
+        options.forEach((key, value) -> System.out.println("[" + key + "] " + value));
+        System.out.println("[X] Return to Restaurant Menu");
+        System.out.print("Select an option: ");
+
+        String choice = reader.readLine().toUpperCase();
+        if ("X".equals(choice)) {
+            System.out.println("Returning to Restaurant Menu...");
+            return;
+        }
+
+        int selectedOption = Integer.parseInt(choice);
+        if (options.containsKey(selectedOption)) {
+            String item = options.get(selectedOption).split(" - ")[0];
+            double price = Double.parseDouble(options.get(selectedOption).split(" - PHP ")[1]);
+
+            System.out.print("Enter Quantity: ");
+            int quantity = Integer.parseInt(reader.readLine());
+            double totalCost = price * quantity;
+
+            // Record the order in the orders file
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(ordersFileName, true))) {
+                writer.write("Customer: " + customerName + ", Account Number: " + accountNumber +
+                        ", Category: " + category + ", Item: " + item + ", Quantity: " + quantity +
+                        ", Total Cost: PHP " + totalCost);
+                writer.newLine();
+            }
+
+            System.out.println("Order placed successfully: " + item + " x" + quantity + " (PHP " + totalCost + ")");
+        } else {
+            System.out.println("Invalid option selected.");
+        }
+    } catch (IOException | NumberFormatException e) {
+        System.out.println("An error occurred while processing the order.");
+    }
+}
+
+// Menu options
+private static Map<Integer, String> getMealOptions() {
+    Map<Integer, String> mealOptions = new HashMap<>();
+    mealOptions.put(1, "Chicken Adobo - PHP 150");
+    mealOptions.put(2, "Pork Sinigang - PHP 200");
+    mealOptions.put(3, "Beef Caldereta - PHP 250");
+    mealOptions.put(4, "Grilled Tilapia - PHP 180");
+    mealOptions.put(5, "Vegetable Kare-Kare - PHP 120");
+    return mealOptions;
+}
+
+private static Map<Integer, String> getDrinkOptions() {
+    Map<Integer, String> drinkOptions = new HashMap<>();
+    drinkOptions.put(1, "Iced Tea - PHP 50");
+    drinkOptions.put(2, "Lemonade - PHP 60");
+    drinkOptions.put(3, "Mango Shake - PHP 80");
+    drinkOptions.put(4, "Coffee - PHP 40");
+    drinkOptions.put(5, "Bottled Water - PHP 20");
+    return drinkOptions;
+}
+
+private static Map<Integer, String> getDessertOptions() {
+    Map<Integer, String> dessertOptions = new HashMap<>();
+    dessertOptions.put(1, "Leche Flan - PHP 70");
+    dessertOptions.put(2, "Halo-Halo - PHP 90");
+    dessertOptions.put(3, "Turon - PHP 50");
+    dessertOptions.put(4, "Buko Pandan - PHP 60");
+    dessertOptions.put(5, "Banana Cue - PHP 40");
+    return dessertOptions;
+}
+
+private static Map<Integer, String> getSideDishOptions() {
+    Map<Integer, String> sideDishOptions = new HashMap<>();
+    sideDishOptions.put(1, "French Fries - PHP 70");
+    sideDishOptions.put(2, "Garlic Rice - PHP 30");
+    sideDishOptions.put(3, "Coleslaw - PHP 50");
+    sideDishOptions.put(4, "Fried Egg - PHP 20");
+    sideDishOptions.put(5, "Mashed Potato - PHP 80");
+    return sideDishOptions;
+}
+
+private static Map<Integer, String> getBundleOptions() {
+    Map<Integer, String> bundleOptions = new HashMap<>();
+    bundleOptions.put(1, "Meal for 2 - PHP 500");
+    bundleOptions.put(2, "Meal for 4 - PHP 900");
+    bundleOptions.put(3, "Meal for 6 - PHP 1300");
+    bundleOptions.put(4, "Family Feast - PHP 2000");
+    bundleOptions.put(5, "Party Package - PHP 3000");
+    return bundleOptions;
+}
+
+// Method to display all restaurant orders and the total cost for a customer
+private static void showOrdersAndTotal(String accountNumber, String customerName) {
+    System.out.println("\n=== SHOW RESTAURANT ORDERS AND TOTAL ===");
+
+    File ordersFile = new File(ordersFileName);
+    if (!ordersFile.exists()) {
+        System.out.println("No orders record found.");
+        return;
+    }
+
+    double totalCost = 0.0;
+    boolean restaurantOrdersFound = false;
+
+    try (BufferedReader fileReader = new BufferedReader(new FileReader(ordersFile))) {
+        String line;
+        System.out.println("Restaurant orders for " + customerName + " (Account Number: " + accountNumber + "):");
+
+        while ((line = fileReader.readLine()) != null) {
+            // Filter orders by the account number and category (Meal, Drink, Dessert, etc.)
+            if (line.contains("Account Number: " + accountNumber)) {
+                // Check if it's a restaurant-related order (i.e., Meal, Drink, Dessert, etc.)
+                if (line.contains("Category: Meal") || 
+                    line.contains("Category: Drink") || 
+                    line.contains("Category: Dessert") || 
+                    line.contains("Category: Side Dish") || 
+                    line.contains("Category: Bundle")) {
+
+                    restaurantOrdersFound = true;
+                    System.out.println(line);
+
+                    // Extract the total cost for this order
+                    String[] parts = line.split(", ");
+                    for (String part : parts) {
+                        if (part.startsWith("Total Cost: PHP ")) {
+                            double cost = Double.parseDouble(part.replace("Total Cost: PHP ", "").trim());
+                            totalCost += cost;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (IOException | NumberFormatException e) {
+        System.out.println("An error occurred while retrieving restaurant orders.");
+    }
+
+    if (restaurantOrdersFound) {
+        System.out.println("Total cost of restaurant orders: PHP " + totalCost);
+    } else {
+        System.out.println("No restaurant orders found for Account Number " + accountNumber + ".");
+    }
+}
+
+}
+
+
+
